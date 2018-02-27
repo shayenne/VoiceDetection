@@ -116,3 +116,88 @@ def load_data(feature_path=None, label_path=None):
 
     # Return data
     return [X, np.ravel(y)]
+
+
+"""
+    Classifiers
+"""
+
+# All true
+def all_true_predict(X):
+    return np.ones(len(X))
+
+
+# Energy threshold
+threshold = None
+def energy_threshold_fit(X_train, y_train):
+    global threshold    
+    threshold = 0.8
+    pass
+
+def energy_threshold_predict(X):
+    global threshold
+    print (threshold)
+    return [1 if x is True else 0 for x in (X >= threshold)]
+
+def find_threshold(ref_values, energy):
+    """ Find the best threshold for the data - IS IT RIGHT? """
+    last_acc = 0 # Start accuracy
+    steps = 1000
+    
+    R, P, Acc, F1, FA = [],[],[],[],[]
+    
+    for threshold in range(steps):
+        # Apply threshold
+        est_values = np.where(energy>(threshold/steps), 1, 0)
+        
+        # Calculate measures
+        TP = (ref_values*est_values).sum()
+        FP = ((ref_values == 0)*est_values).sum()
+        FN = (ref_values*(est_values == 0)).sum()
+        TN = ((ref_values == 0)*(est_values == 0)).sum()
+        
+        R.append(TP/(TP+FN))
+        P.append(TP/(TP+FP))
+        
+        Acc.append((TP+TN)/(TP+TN+FP+FN))
+        F1.append(2*P[-1]*R[-1]/(P[-1]+R[-1]))
+        FA.append(FP/(FP+TN))
+        
+        # Verify best values
+        if last_acc <= Acc[-1]:
+            last_acc = Acc[-1]
+            best = (threshold/steps)
+            output = est_values
+
+    # Plot measures     
+    plt.plot(P, label='P')
+    plt.plot(R, label='R')
+    plt.plot(F1, label='F1')
+    plt.plot(FA, label='FA')
+    plt.plot(Acc, label='Acc')
+    # Place a legend to the right of this smaller subplot.
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.show()
+        
+    return best, output
+
+def evaluate_results(ref_values, est_values):
+    """ Receives the ref_values and est_values """
+    # Calculate measures
+    TP = (ref_values*est_values).sum()
+    FP = ((ref_values == 0)*est_values).sum()
+    FN = (ref_values*(est_values == 0)).sum()
+    TN = ((ref_values == 0)*(est_values == 0)).sum()
+            
+    P = TP/(TP+FP)
+    R = TP/(TP+FN)
+    F = 2*P*R/(P+R)
+    FA = FP/(TN+FP)
+    VA = TP/(TP+FN)
+    OA = (TP + TN) / (len(lbl))
+    print ("Precision:    {}".format(P))
+    print ("Recall:       {}".format(R))
+    print ("F-measure:    {}".format(F))
+    print ("Voicing False Alarm Rate:  {}".format(FA))  
+    print ("Voicing Recall Rate:       {}".format(VA))
+    print ("Overall Accuracy:          {}".format(OA))
