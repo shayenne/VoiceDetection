@@ -10,7 +10,7 @@ import csv
 import os
 
 from paths import *
-
+from metrics import *
 """ 
     Important constants 
 """
@@ -158,7 +158,7 @@ def train_model_SVM(train_features_scaled, train_labels, split):
         clf.fit(train_features_scaled, train_labels)
 
         # save the model to disk
-        filename = 'finalized_model_'+str(split)+'_SVM_'+str(c)+'_VGGish.sav'
+        filename = 'models/finalized_model_'+str(split)+'_SVM_'+str(c)+'_VGGish.sav'
         print (filename)
         joblib.dump(clf, filename)
 
@@ -170,24 +170,32 @@ def train_model_SVM(train_features_scaled, train_labels, split):
 
 """ This part could be done separately to be independent of input """
 # Evaluate the models with validation set
-def predict_model_SVM(clf, test_features_scaled, test_labels):
+def predict_model(clf, test_features_scaled, test_labels):
     print (" == Prediction phase ==")
     # Now lets predict the labels of the test data!
     predictions = clf.predict(test_features_scaled)
 
-    # We can use sklearn to compute the accuracy score
-    accuracy = sklearn.metrics.accuracy_score(test_labels, predictions)
-    return accuracy
+    
+    return predictions
         
 def evaluate_models(models, test_features_scaled, test_labels):
     print (" == Evaluation phase ==")
     results = []
+    conf_mtx = []
     
     for clf, c in models:
-        acc = predict_model_SVM(clf, test_features_scaled, test_labels)
+        predictions = predict_model(clf, test_features_scaled, test_labels)
+        
+        cm = confusion_matrix(test_labels, predictions)
+        
+        conf_mtx.append([c, cm])
+        
+        # We can use sklearn to compute the accuracy score
+        accuracy = sklearn.metrics.accuracy_score(test_labels, predictions)
         print ("Trained model with C-value", c,"has accuracy", acc)
         results.append([c, acc])
-    return results
+        
+    return (results, conf_mtx)
     
 
 # Save results to plot a graph
@@ -196,6 +204,7 @@ def evaluate_models(models, test_features_scaled, test_labels):
 def read_split_file():
     # Store all results
     res_final = []
+    cm_final = []
     
     # Create a list of all musics  
     with open('split_voiced_medleydb.json') as json_file:
@@ -240,18 +249,49 @@ def read_split_file():
 
             models = train_model_SVM(train_features_scaled, train_labels, idx)
 
-            res_validation = evaluate_models(models, validation_features_scaled, validation_labels)
+            res_validation, cm_validation = evaluate_models(models, validation_features_scaled, validation_labels)
             print ("Validation accuracy", res_validation)
-            res_test = evaluate_models(models, test_features_scaled, test_labels) 
+            res_test, cm_test = evaluate_models(models, test_features_scaled, test_labels) 
             print ("Test accuracy", res_test)
             res_final.append([split, res_validation, res_test])
+            cm_final.append([split, cm_validation, cm_test])
         
         with open("cls_results.csv", 'w') as csvfile:
             spamwriter = csv.writer(csvfile, delimiter=',',
                                     quotechar='|', quoting=csv.QUOTE_MINIMAL)
             spamwriter.writerows(res_final)
         print ("Saved results.")
-
+        
+        with open("VGGish_SVM.csv", 'w') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=',',
+                                    quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            spamwriter.writerows(cm_final)
+        print ("Saved results.")
+        
+        
+        """
+        res_final = [
+                    [split, [res_validation = 
+                                            [[par, acc],...,[par, acc]]
+                            ], 
+                            [res_test = 
+                                            [[par, acc],...,[par, acc]]
+                            ]
+                    ]
+        
+        """
+        
+        """
+        cm_final = [
+                    [split, [cm_validation = 
+                                            [[par, cm],...,[par, cm]]
+                            ], 
+                            [cm_test = 
+                                            [[par, cm],...,[par, cm]]
+                            ]
+                    ]
+        
+        """
 
 if __name__ == "__main__":
     
