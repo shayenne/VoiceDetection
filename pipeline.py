@@ -149,7 +149,7 @@ def train_model_SVM(train_features_scaled, train_labels, split):
     # Use scikit-learn to train a model with the training features we've extracted
     models = []
     # Lets use a SVC with folowing C parameters: 
-    params = [100, 10, 1, 0.1, 0.01, 0.001, 0.0001]
+    params = [10, 1, 0.1, 0.01]
 
     for c in params:
         clf = sklearn.svm.SVC(C=c)
@@ -174,10 +174,10 @@ def predict_model(clf, test_features_scaled, test_labels):
     print (" == Prediction phase ==")
     # Now lets predict the labels of the test data!
     predictions = clf.predict(test_features_scaled)
-
     
     return predictions
-        
+       
+    
 def evaluate_models(models, test_features_scaled, test_labels):
     print (" == Evaluation phase ==")
     results = []
@@ -191,7 +191,7 @@ def evaluate_models(models, test_features_scaled, test_labels):
         conf_mtx.append([c, cm])
         
         # We can use sklearn to compute the accuracy score
-        accuracy = sklearn.metrics.accuracy_score(test_labels, predictions)
+        acc = sklearn.metrics.accuracy_score(test_labels, predictions)
         print ("Trained model with C-value", c,"has accuracy", acc)
         results.append([c, acc])
         
@@ -211,19 +211,19 @@ def read_split_file():
         
         data = json.load(json_file)
         
-        for idx in range(len(data)):
+        for split in range(len(data)):
             
             train_files = []
             validation_files = []
             test_files = []
     
-            print ("\n >>> Running for split number >>> ", idx)
+            print ("\n >>> Running for split number >>> ", split)
         
-            for music in data[idx]["train"]:
+            for music in data[split]["train"]:
                 train_files.append(music)
-            for music in data[idx]["validation"]:
+            for music in data[split]["validation"]:
                 validation_files.append(music)
-            for music in data[idx]["test"]:
+            for music in data[split]["test"]:
                 test_files.append(music)
                 
                 
@@ -236,7 +236,7 @@ def read_split_file():
             test_features, test_labels = load_features(test_files, "VGGish_PCA")
 
 
-            filename = 'scaler_VGGish.sav'
+            filename = 'scaler_'+str(split)+'_VGGish.sav'
             scaler = define_scaler(train_features, filename)
 
             # Apply the learned parameters to the training, validation and test sets:
@@ -247,7 +247,7 @@ def read_split_file():
             test_features_scaled = scaler.transform(test_features)
             #****                               ****
 
-            models = train_model_SVM(train_features_scaled, train_labels, idx)
+            models = train_model_SVM(train_features_scaled, train_labels, split)
 
             res_validation, cm_validation = evaluate_models(models, validation_features_scaled, validation_labels)
             print ("Validation accuracy", res_validation)
