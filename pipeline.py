@@ -238,7 +238,7 @@ def read_split_file():
             test_features_scaled = scaler.transform(test_features)
             #****                               ****
 
-            models = train_model_SVM(train_features_scaled, train_labels, split)
+            models = train_model_SVM(train_features_scaled, train_labels, idx)
 
             res_validation = evaluate_models(models, validation_features_scaled, validation_labels)
             print ("Validation accuracy", res_validation)
