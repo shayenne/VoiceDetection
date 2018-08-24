@@ -1,7 +1,12 @@
+from sklearn.externals import joblib
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import json
+import sklearn
 import librosa
+import glob
+import json
+import csv
 import os
 
 from paths import *
@@ -21,38 +26,6 @@ feature_length = 96
 half_sec = 48
 
 """"""
-
-
-
-# Read file with splits
-def read_split_file():
-    # Create a list of all musics  
-    with open('split_voiced_medleydb.json') as json_file:
-        
-        data = json.load(json_file)
-        
-        for idx in range(len(data)):
-            
-            train_files = []
-            validation_files = []
-            test_files = []
-    
-            print ("\n >>> Running for split number >>> ", idx)
-        
-            for music in data[idx]["train"]:
-                train_files.append(music)
-            for music in data[idx]["validation"]:
-                validation_files.append(music)
-            for music in data[idx]["test"]:
-                test_files.append(music)
-                
-            print ("\n ** Features of train files ** ")
-            load_features(train_files, "VGGish_PCA")
-            print ("\n ** Features of validation files ** ")
-            load_features(validation_files, "VGGish_PCA")
-            print ("\n ** Features of test files ** ")
-            load_features(test_files, "VGGish_PCA")
-
             
             
 # Load musics from train set
@@ -86,6 +59,8 @@ def load_features(files, feature):
     for file in files:
         tf = os.environ["FEATURE_PATH"]+file+"/"+file+"_"+feature+".csv"
         tl = os.environ["FEATURE_PATH"]+file+"/"+file+"_vocal.csv"
+        
+        print (tf)
 
         print("filename: {:s}".format(os.path.basename(tf)))
 
@@ -154,16 +129,128 @@ def load_features(files, feature):
       "__class__": {"py/type": "muda.deformers.time.TimeStretch"}}'
     '''
 
+# Train the scaler
+def define_scaler(train_features, filename):
+    print (" == Scaler phase ==")
+    # Create a scale object
+    scaler = sklearn.preprocessing.StandardScaler()
 
+    # Learn the parameters from the training data only
+    scaler.fit(train_features)
+    
+    # save the scaler to disk
+    joblib.dump(scaler, filename)
+
+    return scaler
+    
 # Train the models 
+def train_model_SVM(train_features_scaled, train_labels, split):
+    print (" == Training phase ==")
+    # Use scikit-learn to train a model with the training features we've extracted
+    models = []
+    # Lets use a SVC with folowing C parameters: 
+    params = [100, 10, 1, 0.1, 0.01, 0.001, 0.0001]
 
+    for c in params:
+        clf = sklearn.svm.SVC(C=c)
+
+        # Fit (=train) the model
+        clf.fit(train_features_scaled, train_labels)
+
+        # save the model to disk
+        filename = 'finalized_model_'+str(split)+'_SVM_'+str(c)+'_VGGish.sav'
+        print (filename)
+        joblib.dump(clf, filename)
+
+        models.append([clf, c])
+
+    return models
+        
+        
 
 """ This part could be done separately to be independent of input """
 # Evaluate the models with validation set
+def predict_model_SVM(clf, test_features_scaled, test_labels):
+    print (" == Prediction phase ==")
+    # Now lets predict the labels of the test data!
+    predictions = clf.predict(test_features_scaled)
+
+    # We can use sklearn to compute the accuracy score
+    accuracy = sklearn.metrics.accuracy_score(test_labels, predictions)
+    return accuracy
+        
+def evaluate_models(models, test_features_scaled, test_labels):
+    print (" == Evaluation phase ==")
+    results = []
+    
+    for clf, c in models:
+        acc = predict_model_SVM(clf, test_features_scaled, test_labels)
+        print ("Trained model with C-value", c,"has accuracy", acc)
+        results.append([c, acc])
+    return results
+    
 
 # Save results to plot a graph
 
+# Read file with splits
+def read_split_file():
+    # Store all results
+    res_final = []
+    
+    # Create a list of all musics  
+    with open('split_voiced_medleydb.json') as json_file:
+        
+        data = json.load(json_file)
+        
+        for idx in range(len(data)):
+            
+            train_files = []
+            validation_files = []
+            test_files = []
+    
+            print ("\n >>> Running for split number >>> ", idx)
+        
+            for music in data[idx]["train"]:
+                train_files.append(music)
+            for music in data[idx]["validation"]:
+                validation_files.append(music)
+            for music in data[idx]["test"]:
+                test_files.append(music)
+                
+                
+            #**** It will happen within the for ****       
+            print ("\n ** Features of train files ** ")
+            train_features, train_labels = load_features(train_files, "VGGish_PCA")
+            print ("\n ** Features of validation files ** ")
+            validation_features, validation_labels = load_features(validation_files, "VGGish_PCA")
+            print ("\n ** Features of test files ** ")
+            test_features, test_labels = load_features(test_files, "VGGish_PCA")
 
+
+            filename = 'scaler_VGGish.sav'
+            scaler = define_scaler(train_features, filename)
+
+            # Apply the learned parameters to the training, validation and test sets:
+            train_features_scaled = scaler.transform(train_features)
+
+            validation_features_scaled = scaler.transform(validation_features)
+
+            test_features_scaled = scaler.transform(test_features)
+            #****                               ****
+
+            models = train_model_SVM(train_features_scaled, train_labels, split)
+
+            res_validation = evaluate_models(models, validation_features_scaled, validation_labels)
+            print ("Validation accuracy", res_validation)
+            res_test = evaluate_models(models, test_features_scaled, test_labels) 
+            print ("Test accuracy", res_test)
+            res_final.append([split, res_validation, res_test])
+        
+        with open("cls_results.csv", 'w') as csvfile:
+            spamwriter = csv.writer(csvfile, delimiter=',',
+                                    quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            spamwriter.writerows(res_final)
+        print ("Saved results.")
 
 
 if __name__ == "__main__":
